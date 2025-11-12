@@ -67,12 +67,9 @@ class Main:
 class Combinaison(Main):
     def __init__(self, tuiles):
         super().__init__()
-        # accepter une liste de tuiles
         self.tuiles = list(tuiles)
-
     def contient_joker(self):
         return any(t.is_joker for t in self.tuiles)
-
     def remplacer_joker(self, tuile_replacement:Tuile):
         for i, t in enumerate(self.tuiles):
             if t.is_joker:
@@ -106,15 +103,15 @@ class Rack:
     def ajouter_tuile(self, tuile:Tuile):
         self.tuiles.append(tuile)
 
-    def retirer_tuile(self, tuile:Tuile):
+    def retirer(self, tuile:Tuile):
+        """Retire la tuile fournie du rack.
+
+        Utiliser `retirer(...)` plutôt que différentes variantes de nom pour
+        garder l'API simple et éviter les méthodes redondantes.
+        """
         self.tuiles.remove(tuile)
 
-    # alias pour compatibilité avec d'autres noms utilisés
-    def retirer(self, tuile:Tuile):
-        return self.retirer_tuile(tuile)
-
     def afficher(self):
-
         if not self.tuiles:
             return "(vide)"
         parts = []
@@ -129,9 +126,7 @@ class Rack:
     
 class Plateau:
     def reutiliser_tuiles(self, indices):
-        
         tuiles = []
-        
         for idx_comb, idx_tuile in sorted(indices, reverse=True):
             tuiles.append(self.retirer_tuile(idx_comb, idx_tuile))
         return tuiles
@@ -142,17 +137,14 @@ class Plateau:
         self.mains.append(main)
 
     def ajouter(self, combinaison:Main):
-        """Ajoute une combinaison si elle est valide. Retourne True/False."""
         if hasattr(combinaison, 'est_valide') and combinaison.est_valide():
             self.mains.append(combinaison)
             return True
         return False
 
     def retirer_tuile(self, index_combinaison:int, index_tuile:int):
-
         try:
             tuile = self.mains[index_combinaison].tuiles.pop(index_tuile)
-            # Si la combinaison devient vide, on la retire du plateau
             if not self.mains[index_combinaison].tuiles:
                 self.mains.pop(index_combinaison)
             return tuile
@@ -161,7 +153,6 @@ class Plateau:
             return None
 
     def ajouter_tuile(self, index_combinaison:int, tuile, pos_dest: int = None):
-      
         try:
             if pos_dest is None:
                 self.mains[index_combinaison].tuiles.append(tuile)
@@ -173,22 +164,17 @@ class Plateau:
             return False
 
     def toutes_tuiles(self):
-        
-        result = []
-        for i, comb in enumerate(self.mains):
-            for j, t in enumerate(comb.tuiles):
-                result.append((i, j, t))
-        return result
+        # Méthode supprimée (ancienne helper non utilisée). Conservée en
+        # commentaire si on souhaite réintroduire une fonctionnalité similaire.
+        raise NotImplementedError("toutes_tuiles() has been removed as it was unused")
 
     def deplacer_tuile(self, index_src:int, index_tuile:int, index_dest:int, pos_dest:int=None):
-        
         try:
             tuile = self.mains[index_src].tuiles.pop(index_tuile)
             if pos_dest is None:
                 self.mains[index_dest].tuiles.append(tuile)
             else:
                 self.mains[index_dest].tuiles.insert(pos_dest, tuile)
-            # Si la combinaison source devient vide, on la retire
             if not self.mains[index_src].tuiles:
                 self.mains.pop(index_src)
             return True
@@ -197,7 +183,6 @@ class Plateau:
             return False
 
     def fusionner_combinaisons(self, index1:int, index2:int):
-       
         try:
             self.mains[index1].tuiles.extend(self.mains[index2].tuiles)
             self.mains.pop(index2)
@@ -207,7 +192,6 @@ class Plateau:
             return False
 
     def split_combinaison(self, index:int, split_pos:int):
-        
         try:
             comb = self.mains[index]
             tuiles1 = comb.tuiles[:split_pos]
@@ -220,7 +204,6 @@ class Plateau:
             return False
 
     def est_valide_plateau(self):
-       
         return all(m.est_valide() for m in self.mains)
 
     def __repr__(self):
@@ -239,14 +222,12 @@ class Plateau:
 class Joueur:
     def __init__(self, nom:str):
         self.nom = nom
-        # main représente une combinaison en cours, rack est la main du joueur
         self.main = Main()
         self.rack = Rack()
 
     def piocher(self, pioche:Pioche):
         tuile = pioche.tirer()
         if tuile:
-            # piocher met une tuile dans le rack du joueur
             self.rack.ajouter_tuile(tuile)
 
     def tirer_tuile(self, pioche:Pioche):
@@ -259,7 +240,7 @@ class Joueur:
     def jouer_main(self, plateau:Plateau):
         if self.main.est_valide():
             plateau.ajouter_main(self.main)
-            self.main = Main()  # Réinitialiser la main après le jeu
+            self.main = Main() 
 
     def manipuler_plateau(self, plateau:Plateau, action:str, **kwargs):
         
