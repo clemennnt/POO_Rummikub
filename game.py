@@ -1,13 +1,19 @@
 from classes import Tuile, Main, Pioche, Plateau, Joueur, Combinaison
 import copy
 class Jeu:
-    def __init__(self):
+    def __init__(self, n_joueurs: int = 1):
+        """Initialise une partie avec n_joueurs (par défaut 1).
+
+        Chaque joueur reçoit 14 tuiles au départ.
+        """
         self.pioche = Pioche()
         self.plateau = Plateau()
-        self.joueurs = [Joueur("Joueur 1")]
+        # Crée la liste de joueurs
+        self.joueurs = [Joueur(f"Joueur {i+1}") for i in range(max(1, int(n_joueurs)))]
         self.tour = 0
         self.partie_terminee = False
 
+        # Distribution initiale : 14 tuiles par joueur
         for _ in range(14):
             for j in self.joueurs:
                 j.piocher(self.pioche)
