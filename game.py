@@ -71,6 +71,16 @@ class Jeu:
                 return
             comb = Combinaison(tuiles)
             if comb.est_valide():
+                # Calcul des points apportés par les tuiles prises dans le rack
+                comb_rack = Combinaison(tuiles_rack) if tuiles_rack else None
+                points_rack = comb_rack.points(context='initial') if comb_rack else 0
+
+                # Si c'est la première modification liée au rack ce tour, on sauvegarde l'état
+                if comb_rack and not getattr(joueur, 'has_melded', False) and not getattr(joueur, 'temp_meld_points', 0):
+                    joueur._backup_plateau = copy.deepcopy(self.plateau.mains)
+                    joueur._backup_rack = list(joueur.rack.tuiles)
+                    joueur._placed_this_turn = True
+
                 # Retirer d'abord les tuiles du plateau (attention à l'ordre)
                 for i,j in sorted(pos_list, reverse=True):
                     self.plateau.retirer_tuile(i, j)
@@ -78,6 +88,12 @@ class Jeu:
                 for idx in sorted(rack_list, reverse=True):
                     joueur.rack.retirer(joueur.rack.tuiles[idx])
                 self.plateau.ajouter(comb)
+                # Accumuler les points temp pour la première pose, ou ajouter directement si already melded
+                if points_rack > 0:
+                    if getattr(joueur, 'has_melded', False):
+                        joueur.points = getattr(joueur, 'points', 0) + points_rack
+                    else:
+                        joueur.temp_meld_points = getattr(joueur, 'temp_meld_points', 0) + points_rack
                 print(" Combinaison posée !")
             else:
                 print(" Combinaison invalide (selon les tuiles sélectionnées).")
@@ -85,20 +101,73 @@ class Jeu:
             print("Erreur :", e)
 
     def tirer_tuile(self, joueur):
+        if getattr(joueur, 'has_drawn', False):
+            print(f"{joueur.nom} a déjà tiré ce tour.")
+            return
         t = joueur.tirer_tuile(self.pioche)
         if t:
+            joueur.has_drawn = True
             print(f"{joueur.nom} a tiré {t}")
         else:
             print("La pioche est vide.")
 
     def passer_tour(self):
+        # Valider ou annuler l'initial meld si nécessaire pour le joueur courant
+        current = self.joueurs[self.tour % len(self.joueurs)]
+        if not getattr(current, 'has_melded', False):
+            temp = getattr(current, 'temp_meld_points', 0)
+            if temp > 0 and temp < 30:
+                # rollback
+                if getattr(current, '_backup_plateau', None) is not None:
+                    self.plateau.mains = current._backup_plateau
+                if getattr(current, '_backup_rack', None) is not None:
+                    current.rack.tuiles = current._backup_rack
+                current.temp_meld_points = 0
+                current._backup_plateau = None
+                current._backup_rack = None
+                current._placed_this_turn = False
+                print("Première pose non atteinte (moins de 30 pts) : mouvements annulés.")
+            elif temp >= 30:
+                current.points = getattr(current, 'points', 0) + temp
+                current.has_melded = True
+                current.temp_meld_points = 0
+                current._backup_plateau = None
+                current._backup_rack = None
+                current._placed_this_turn = False
+        # Reset draw flag
+        current.has_drawn = False
         print("Tour passé.")
 
     def verifier_fin(self):
-        for j in self.joueurs:
-            if len(j.rack.tuiles) == 0:
-                print(f" {j.nom} a gagné la partie !")
+        # Vérifie si un joueur a vidé son rack. Si oui, calcule les points finaux
+        for winner in self.joueurs:
+            if len(winner.rack.tuiles) == 0:
+                # Calcul des points restants pour chaque joueur
+                def somme_tuiles(rack):
+                    total = 0
+                    for t in rack.tuiles:
+                        if getattr(t, 'is_joker', False):
+                            total += 25
+                        else:
+                            total += getattr(t, 'valeur', 0)
+                    return total
+
+                totals = {p: somme_tuiles(p.rack) for p in self.joueurs}
+                total_others = sum(v for p, v in totals.items() if p is not winner)
+
+                # Le gagnant gagne la somme des points restants des autres joueurs
+                winner.points = getattr(winner, 'points', 0) + total_others
+                # Les autres perdent leurs points restants
+                for p, val in totals.items():
+                    if p is not winner:
+                        p.points = getattr(p, 'points', 0) - val
+
+                print(f"{winner.nom} a gagné la partie !")
+                print("--- Score final ---")
+                for p in self.joueurs:
+                    print(f"{p.nom} : {getattr(p, 'points', 0)} pts (tuiles restantes valeur: {totals[p]})")
                 self.partie_terminee = True
+                return
 
     def jouer(self):
         print("=== Début du jeu Rummikub ===")
@@ -112,7 +181,12 @@ class Jeu:
             if choix == "p":
                 self.poser_combinaison(joueur)
             elif choix == "t":
+                # Tirage : autorisé une seule fois par tour, puis passage direct au joueur suivant
                 self.tirer_tuile(joueur)
+                # passer au tour suivant immédiatement
+                self.verifier_fin()
+                self.tour += 1
+                continue
             elif choix == "m":
                 sub = input("Action plateau (deplacer/fusionner/split) : ").lower().strip()
 
@@ -125,6 +199,21 @@ class Jeu:
                         pos_dest_str = input("Position d'insertion destination (optionnel, vide pour fin) : ").strip()
                         pos_dest = int(pos_dest_str) if pos_dest_str != "" else None
                         ok = joueur.manipuler_plateau(self.plateau, 'deplacer', index_src=i, index_tuile=j, index_dest=dest, pos_dest=pos_dest)
+                    elif sub == 'deplacer_mult':
+                        # sources multiples ex: 0:1,1:2
+                        sources_str = input("Sources (ex: 0:1,1:2) : ").strip()
+                        parts = [p.strip() for p in sources_str.split(",") if p.strip()]
+                        sources = [(int(a), int(b)) for a,b in (part.split(":" ) for part in parts)]
+                        dest = int(input("Index combinaison destination : "))
+                        pos_dest_str = input("Position d'insertion destination (optionnel, vide pour fin) : ").strip()
+                        pos_dest = int(pos_dest_str) if pos_dest_str != "" else None
+                        # backup
+                        backup = copy.deepcopy(self.plateau.mains)
+                        ok = self.plateau.deplacer_tuiles(sources, dest, pos_dest)
+                        if not self.plateau.est_valide_plateau():
+                            print(" Déplacement annulé : le plateau serait invalide. Restauration de l'état précédent.")
+                            self.plateau.mains = backup
+                            ok = False
                     elif sub == 'fusionner':
                         a = int(input("Index 1 : "))
                         b = int(input("Index 2 : "))

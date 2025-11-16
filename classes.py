@@ -7,9 +7,17 @@ class Tuile:
         self.is_joker = is_joker
 
     def __repr__(self):
+        # Affichage couleur terminal (ANSI)
         if self.is_joker:
-            return "Tuile(Joker)"
-        return f"{self.couleur[:1].upper()}{self.valeur}"
+            return "\033[35mJ\033[0m"  # Joker en magenta
+        couleur_ansi = {
+            "rouge": "\033[31m",
+            "bleu": "\033[34m",
+            "noir": "\033[30m",
+            "jaune": "\033[33m"
+        }.get(self.couleur, "")
+        reset = "\033[0m"
+        return f"{couleur_ansi}{self.valeur}{reset}"
 
 class Main:
     def __init__(self):
@@ -76,6 +84,57 @@ class Combinaison(Main):
                 self.tuiles[i] = tuile_replacement
                 return True
         return False
+    def points(self, context: str = 'normal'):
+        """Calcule les points de la combinaison.
+
+        Paramètre implicite (comportement selon contexte) :
+        - context='initial' : pour la première pose, les jokers prennent la valeur
+          des tuiles qu'ils remplacent (inférée à partir de la combinaison).
+        - context='final' : pour le décompte final, chaque joker vaut 25 points.
+        - context='normal' : jokers valent 30 points par défaut (fallback).
+
+        On tente d'inférer la valeur des jokers pour les suites (run) ou groupes
+        (même valeur). Si l'inférence échoue, on utilise une valeur par défaut
+        (30) pour les jokers en contexte normal/initial, et 25 en contexte final.
+        """
+        def _sum_final():
+            total = 0
+            for t in self.tuiles:
+                if getattr(t, 'is_joker', False):
+                    total += 25
+                else:
+                    total += getattr(t, 'valeur', 0)
+            return total
+
+        if context == 'final':
+            return _sum_final()
+
+        # contexte 'initial' ou 'normal' : essayer d'inférer jokers
+        jokers = [i for i, t in enumerate(self.tuiles) if getattr(t, 'is_joker', False)]
+        non_jokers = [t for t in self.tuiles if not getattr(t, 'is_joker', False)]
+        valeurs = [t.valeur for t in non_jokers]
+        couleurs = [t.couleur for t in non_jokers]
+        n = len(self.tuiles)
+
+        # Groupe : même valeur
+        if len(valeurs) > 0 and len(set(valeurs)) == 1:
+            v = valeurs[0]
+            return v * n
+
+        # Suite : même couleur, valeurs consécutives possibles
+        if len(set(couleurs)) == 1 and len(valeurs) > 0:
+            vals = sorted(valeurs)
+            jokers_count = len(jokers)
+            min_start = max(1, vals[0] - jokers_count)
+            max_start = min(13 - n + 1, vals[-1])
+            for start in range(min_start, max_start + 1):
+                seq = list(range(start, start + n))
+                if all(v in seq for v in vals):
+                    return sum(seq)
+
+        # Fallback : somme des non-jokers + jokers * valeur par défaut (30)
+        total = sum(valeurs) + len(jokers) * 30
+        return total
 
 
 
@@ -182,6 +241,44 @@ class Plateau:
             print(f"Erreur lors du déplacement de tuile : {e}")
             return False
 
+    def deplacer_tuiles(self, sources:list, index_dest:int, pos_dest:int=None):
+        """Déplace plusieurs tuiles spécifiées par sources (liste de (i,j)).
+
+        L'opération retire d'abord toutes les sources (en triant en ordre inverse
+        pour ne pas casser les indices), puis insère les tuiles dans la
+        combinaison destination à la position pos_dest (si None -> fin).
+        Retourne True si appliqué, False en cas d'erreur.
+        """
+        try:
+            # Normaliser et trier les sources
+            sources_norm = sorted(sources, key=lambda x: (x[0], x[1]))
+            # Récupérer les tuiles dans l'ordre des sources
+            tuiles = [self.mains[i].tuiles[j] for (i, j) in sources_norm]
+            # Retirer en ordre inverse pour préserver indices
+            for i, j in sorted(sources_norm, reverse=True):
+                self.retirer_tuile(i, j)
+
+            # Si destination est en fin (nouvelle combinaison)
+            if index_dest >= len(self.mains):
+                # créer nouvelle combinaison
+                comb = Combinaison(tuiles)
+                self.mains.append(comb)
+                return True
+
+            # Insertion : si pos_dest None => append in order
+            if pos_dest is None:
+                for t in tuiles:
+                    self.mains[index_dest].tuiles.append(t)
+            else:
+                # insérer en respectant l'ordre des tuiles
+                for offset, t in enumerate(tuiles):
+                    self.mains[index_dest].tuiles.insert(pos_dest + offset, t)
+
+            return True
+        except Exception as e:
+            print(f"Erreur lors du déplacement multiple : {e}")
+            return False
+
     def fusionner_combinaisons(self, index1:int, index2:int):
         try:
             self.mains[index1].tuiles.extend(self.mains[index2].tuiles)
@@ -214,7 +311,9 @@ class Plateau:
             return "(aucune combinaison sur le plateau)"
         out = []
         for i, m in enumerate(self.mains):
-            out.append(f"{i}: {m.tuiles}")
+            # Affiche chaque tuile de la combinaison avec son index
+            tuiles_str = "  ".join(f"{j}:{t}" for j, t in enumerate(m.tuiles))
+            out.append(f"{i}: {tuiles_str}")
         return "\n".join(out)
     
     
@@ -224,6 +323,15 @@ class Joueur:
         self.nom = nom
         self.main = Main()
         self.rack = Rack()
+        # Points accumulés et état de la première pose
+        self.points = 0
+        self.has_melded = False
+        # État temporaire pendant un tour
+        self.has_drawn = False
+        self.temp_meld_points = 0
+        self._backup_plateau = None
+        self._backup_rack = None
+        self._placed_this_turn = False
 
     def piocher(self, pioche:Pioche):
         tuile = pioche.tirer()
