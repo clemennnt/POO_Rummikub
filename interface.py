@@ -6,7 +6,29 @@ from game import Jeu
 import copy
 
 class RummikubInterface(QWidget):
+    """
+    Interface graphique principale du jeu Rummikub (PyQt5).
+
+    Attributs :
+        jeu (Jeu): Instance du jeu.
+        joueur (Joueur): Joueur courant.
+        tour (int): Index du tour.
+        selected_plateau (set): Sélection de tuiles sur le plateau.
+        selected_rack (set): Sélection de tuiles dans le rack.
+
+    Méthodes principales :
+        init_ui() : Construit l'UI.
+        refresh() : Met à jour l'affichage.
+        poser_combinaison() : Pose une combinaison sur le plateau.
+        deplacer_selection() : Déplace des tuiles sélectionnées.
+        retirer_selection() : Retire des tuiles du plateau vers le rack.
+        passer_tour() : Passe au joueur suivant.
+    """
     def __init__(self):
+        """
+        Initialise l'interface graphique du jeu Rummikub.
+        Demande le nombre de joueurs et leurs noms, puis prépare l'UI.
+        """
         super().__init__()
         self.setWindowTitle("Rummikub - Interface graphique ")
         # Demande le nombre de joueurs au démarrage puis leurs noms
@@ -35,6 +57,9 @@ class RummikubInterface(QWidget):
         
 
     def init_ui(self):
+        """
+        Construit tous les widgets et layouts principaux de l'interface.
+        """
         self.layout = QVBoxLayout()
         self.plateau_grid = QVBoxLayout()
         self.rack_layout = QHBoxLayout()
@@ -112,6 +137,9 @@ class RummikubInterface(QWidget):
             QApplication.quit() 
 
     def refresh(self):
+        """
+        Met à jour l'affichage du plateau, du rack et du joueur courant.
+        """
         # Met à jour le joueur courant
         self.joueur = self.jeu.joueurs[self.tour % len(self.jeu.joueurs)]
         # Affiche le joueur courant en haut
@@ -210,6 +238,10 @@ class RummikubInterface(QWidget):
         return toggle
 
     def poser_combinaison(self):
+        """
+        Pose une nouvelle combinaison sur le plateau à partir de la sélection.
+        Gère la validation, le calcul des points et la fin de partie.
+        """
         pos_list = list(self.selected_plateau)
         rack_list = list(self.selected_rack)
         try:
@@ -271,11 +303,11 @@ class RummikubInterface(QWidget):
             self.msg.setStyleSheet("color: red;")
             self.msg.setText(f"Erreur : {e}")
 
-    # La fonctionnalité 'poser_colonne' a été retirée — le jeu utilise désormais
-    # uniquement des combinaisons en ligne (row). Les méthodes liées aux
-    # colonnes ont été supprimées pour revenir à l'état précédent.
 
     def deplacer_selection(self):
+        """
+        Déplace les tuiles sélectionnées du plateau vers une autre combinaison ou en crée une nouvelle.
+        """
         from PyQt5.QtWidgets import QInputDialog
         if not self.selected_plateau:
             self.msg.setStyleSheet("color: red;")
@@ -317,6 +349,9 @@ class RummikubInterface(QWidget):
             self.msg.setText(f"Erreur lors du déplacement : {e}")
 
     def retirer_selection(self):
+        """
+        Retire les tuiles sélectionnées du plateau et les remet dans le rack du joueur.
+        """
         from copy import deepcopy
         if not self.selected_plateau:
             self.msg.setStyleSheet("color: red;")
@@ -355,6 +390,9 @@ class RummikubInterface(QWidget):
             self.msg.setText(f"Erreur lors du retrait : {e}")
 
     def passer_tour(self):
+        """
+        Termine le tour du joueur courant, valide la première pose si besoin, passe au joueur suivant.
+        """
         # Gérer la validation de la première pose (accumulation multi-combinaisons)
         current = self.jeu.joueurs[self.tour % len(self.jeu.joueurs)]
         # Si le joueur n'a pas encore validé son initial meld

@@ -1,6 +1,24 @@
 from classes import Tuile, Main, Pioche, Plateau, Joueur, Combinaison
 import copy
 class Jeu:
+    """
+    Gère la logique principale d'une partie de Rummikub (console).
+
+    Attributs :
+        pioche (Pioche): Pioche du jeu.
+        plateau (Plateau): Plateau de jeu.
+        joueurs (list[Joueur]): Liste des joueurs.
+        tour (int): Index du tour courant.
+        partie_terminee (bool): Indique si la partie est finie.
+
+    Méthodes principales :
+        afficher_etat() : Affiche l'état du jeu.
+        poser_combinaison(joueur) : Pose une combinaison.
+        tirer_tuile(joueur) : Tire une tuile pour un joueur.
+        passer_tour() : Passe au joueur suivant.
+        verifier_fin() : Vérifie la fin de partie et calcule les scores.
+        jouer() : Boucle principale du jeu console.
+    """
     def __init__(self, n_joueurs: int = 1):
         """Initialise une partie avec n_joueurs (par défaut 1).
 

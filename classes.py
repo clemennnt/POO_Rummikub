@@ -1,6 +1,15 @@
 import random
 
 class Tuile:
+    """
+    Représente une tuile du jeu Rummikub.
+    Attributs :
+        couleur (str): Couleur de la tuile ('rouge', 'bleu', 'noir', 'jaune', ou 'joker').
+        valeur (int): Valeur numérique de la tuile (1-13, ou 0 pour joker).
+        is_joker (bool): Indique si la tuile est un joker.
+    Méthodes :
+        __init__, __repr__
+    """
     def __init__(self, couleur:str, valeur:int, is_joker:bool=False):
         self.couleur = couleur
         self.valeur = valeur
@@ -20,6 +29,13 @@ class Tuile:
         return f"{couleur_ansi}{self.valeur}{reset}"
 
 class Main:
+    """
+    Représente une main de tuiles (utilisée pour les combinaisons et le rack).
+    Attributs :
+        tuiles (list[Tuile]) : Liste des tuiles dans la main.
+    Méthodes :
+        ajouter_tuile, retirer_tuile, est_valide, __repr__
+    """
     def __init__(self):
         self.tuiles = []
 
@@ -73,6 +89,11 @@ class Main:
 
 
 class Combinaison(Main):
+    """
+    Représente une combinaison de tuiles (suite ou groupe). Hérite de Main.
+    Méthodes :
+        contient_joker, remplacer_joker, points
+    """
     def __init__(self, tuiles):
         super().__init__()
         self.tuiles = list(tuiles)
@@ -91,11 +112,7 @@ class Combinaison(Main):
         - context='initial' : pour la première pose, les jokers prennent la valeur
           des tuiles qu'ils remplacent (inférée à partir de la combinaison).
         - context='final' : pour le décompte final, chaque joker vaut 25 points.
-        - context='normal' : jokers valent 30 points par défaut (fallback).
 
-        On tente d'inférer la valeur des jokers pour les suites (run) ou groupes
-        (même valeur). Si l'inférence échoue, on utilise une valeur par défaut
-        (30) pour les jokers en contexte normal/initial, et 25 en contexte final.
         """
         def _sum_final():
             total = 0
@@ -109,7 +126,7 @@ class Combinaison(Main):
         if context == 'final':
             return _sum_final()
 
-        # contexte 'initial' ou 'normal' : essayer d'inférer jokers
+        # contexte 'initial'  : essayer d'inférer jokers
         jokers = [i for i, t in enumerate(self.tuiles) if getattr(t, 'is_joker', False)]
         non_jokers = [t for t in self.tuiles if not getattr(t, 'is_joker', False)]
         valeurs = [t.valeur for t in non_jokers]
@@ -132,13 +149,16 @@ class Combinaison(Main):
                 if all(v in seq for v in vals):
                     return sum(seq)
 
-        # Fallback : somme des non-jokers + jokers * valeur par défaut (30)
-        total = sum(valeurs) + len(jokers) * 30
-        return total
-
 
 
 class Pioche:
+    """
+    Représente la pioche du jeu (ensemble des tuiles restantes).
+    Attributs :
+        tuiles (list[Tuile]) : Tuiles restantes à piocher.
+    Méthodes :
+        tirer, __repr__
+    """
     def __init__(self):
         self.tuiles = []
         couleurs = ["rouge", "bleu", "noir", "jaune"]
@@ -156,6 +176,13 @@ class Pioche:
   
     
 class Rack:
+    """
+    Représente le rack d'un joueur (tuiles en main).
+    Attributs :
+        tuiles (list[Tuile]) : Tuiles du rack.
+    Méthodes :
+        ajouter_tuile, retirer, afficher, __repr__
+    """
     def __init__(self):
         self.tuiles = []
 
@@ -163,11 +190,6 @@ class Rack:
         self.tuiles.append(tuile)
 
     def retirer(self, tuile:Tuile):
-        """Retire la tuile fournie du rack.
-
-        Utiliser `retirer(...)` plutôt que différentes variantes de nom pour
-        garder l'API simple et éviter les méthodes redondantes.
-        """
         self.tuiles.remove(tuile)
 
     def afficher(self):
@@ -184,6 +206,15 @@ class Rack:
     
     
 class Plateau:
+    """
+    Représente le plateau de jeu, contenant toutes les combinaisons posées.
+    Attributs :
+        mains (list[Combinaison]) : Liste des combinaisons posées sur le plateau.
+    Méthodes :
+        reutiliser_tuiles, ajouter_main, ajouter, retirer_tuile, ajouter_tuile,
+        deplacer_tuile, deplacer_tuiles, fusionner_combinaisons, split_combinaison,
+        est_valide_plateau, afficher, __repr__
+    """
     def reutiliser_tuiles(self, indices):
         tuiles = []
         for idx_comb, idx_tuile in sorted(indices, reverse=True):
@@ -222,10 +253,6 @@ class Plateau:
             print(f"Erreur lors de l'ajout de tuile : {e}")
             return False
 
-    def toutes_tuiles(self):
-        # Méthode supprimée (ancienne helper non utilisée). Conservée en
-        # commentaire si on souhaite réintroduire une fonctionnalité similaire.
-        raise NotImplementedError("toutes_tuiles() has been removed as it was unused")
 
     def deplacer_tuile(self, index_src:int, index_tuile:int, index_dest:int, pos_dest:int=None):
         try:
@@ -242,13 +269,7 @@ class Plateau:
             return False
 
     def deplacer_tuiles(self, sources:list, index_dest:int, pos_dest:int=None):
-        """Déplace plusieurs tuiles spécifiées par sources (liste de (i,j)).
 
-        L'opération retire d'abord toutes les sources (en triant en ordre inverse
-        pour ne pas casser les indices), puis insère les tuiles dans la
-        combinaison destination à la position pos_dest (si None -> fin).
-        Retourne True si appliqué, False en cas d'erreur.
-        """
         try:
             # Normaliser et trier les sources
             sources_norm = sorted(sources, key=lambda x: (x[0], x[1]))
@@ -319,6 +340,21 @@ class Plateau:
     
     
 class Joueur:
+    """
+    Représente un joueur du Rummikub.
+    Attributs :
+        nom (str): Nom du joueur.
+        main (Main): Main temporaire (utilisée pour manipuler avant pose).
+        rack (Rack): Tuiles du joueur.
+        points (int): Score du joueur.
+        has_melded (bool): Indique si la première pose a été validée.
+        has_drawn (bool): Indique si le joueur a déjà pioché ce tour.
+        temp_meld_points (int): Points accumulés pour la première pose.
+        _backup_plateau, _backup_rack: Sauvegardes pour rollback.
+        _placed_this_turn (bool): Indique si une pose a été faite ce tour.
+    Méthodes :
+        piocher, tirer_tuile, jouer_main, manipuler_plateau, __repr__
+    """
     def __init__(self, nom:str):
         self.nom = nom
         self.main = Main()
@@ -364,6 +400,5 @@ class Joueur:
 
     def __repr__(self):
         return f"Joueur(nom={self.nom}, main={self.main}, rack={self.rack})" 
-
 
 
